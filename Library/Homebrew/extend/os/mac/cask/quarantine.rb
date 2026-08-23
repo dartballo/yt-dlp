@@ -50,12 +50,22 @@ module OS
           def signing_identity_match(file, identity)
             MacOS::FFI::Security.requirement_match(file.to_s, identity.requirement)
           end
+        end
+
+        # Overrides for the quarantine metadata operations reached via
+        # {::Cask::Quarantine.when_available}.
+        module MetadataMethods
+          extend T::Helpers
+          include Kernel
+          include ::Utils::Output::Mixin
+
+          requires_ancestor { ::Cask::Quarantine::Metadata }
 
           sig { params(cask: T.nilable(::Cask::Cask), download_path: T.nilable(::Pathname), action: T::Boolean).void }
           def cask!(cask: nil, download_path: nil, action: true)
             return if cask.nil? || download_path.nil?
 
-            return if ::Cask::Quarantine.detect(download_path)
+            return if detect(download_path)
 
             odebug "Quarantining #{download_path}"
 
@@ -133,3 +143,4 @@ module OS
 end
 
 Cask::Quarantine.singleton_class.prepend(OS::Mac::Cask::Quarantine::ClassMethods)
+Cask::Quarantine::Metadata.prepend(OS::Mac::Cask::Quarantine::MetadataMethods)
