@@ -5,13 +5,13 @@ GEM
     base64 (0.3.0)
     benchmark (0.5.0)
     bigdecimal (4.1.2)
-    bindata (2.5.1)
+    bindata (3.0.0)
     concurrent-ruby (1.3.8)
     csv (3.3.6)
     diff-lcs (1.6.2)
     drb (2.2.3)
-    elftools (1.3.1)
-      bindata (~> 2)
+    elftools (2.0.0)
+      bindata (>= 2, < 4)
     erubi (1.13.1)
     hana (1.3.7)
     json (2.21.2)
@@ -91,9 +91,9 @@ GEM
     rubocop-md (2.0.4)
       lint_roller (~> 1.1)
       rubocop (>= 1.72.1)
-    rubocop-performance (1.26.1)
+    rubocop-performance (1.27.0)
       lint_roller (~> 1.1)
-      rubocop (>= 1.75.0, < 2.0)
+      rubocop (>= 1.89.0, < 2.0)
       rubocop-ast (>= 1.47.1, < 2.0)
     rubocop-rspec (3.10.2)
       lint_roller (~> 1.1)
@@ -120,15 +120,15 @@ GEM
       rexml
       simplecov (~> 1.0)
     simpleidn (0.2.3)
-    sorbet (0.6.13426)
-      sorbet-static (= 0.6.13426)
-    sorbet-runtime (0.6.13426)
-    sorbet-static (0.6.13426-aarch64-linux)
-    sorbet-static (0.6.13426-universal-darwin)
-    sorbet-static (0.6.13426-x86_64-linux)
-    sorbet-static-and-runtime (0.6.13426)
-      sorbet (= 0.6.13426)
-      sorbet-runtime (= 0.6.13426)
+    sorbet (0.6.13428)
+      sorbet-static (= 0.6.13428)
+    sorbet-runtime (0.6.13428)
+    sorbet-static (0.6.13428-aarch64-linux)
+    sorbet-static (0.6.13428-universal-darwin)
+    sorbet-static (0.6.13428-x86_64-linux)
+    sorbet-static-and-runtime (0.6.13428)
+      sorbet (= 0.6.13428)
+      sorbet-runtime (= 0.6.13428)
     spoom (1.8.7)
       erubi (>= 1.10.0)
       prism (>= 0.28.0)
@@ -157,7 +157,7 @@ GEM
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
     unicode-emoji (4.2.0)
-    vernier (1.10.1)
+    vernier (1.11.0)
     yard (0.9.45)
     yard-sorbet (0.9.0)
       sorbet-runtime
@@ -214,12 +214,12 @@ CHECKSUMS
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
   benchmark (0.5.0) sha256=465df122341aedcb81a2a24b4d3bd19b6c67c1530713fd533f3ff034e419236c
   bigdecimal (4.1.2) sha256=53d217666027eab4280346fba98e7d5b66baaae1b9c3c1c0ffe89d48188a3fbd
-  bindata (2.5.1) sha256=53186a1ec2da943d4cb413583d680644eb810aacbf8902497aac8f191fad9e58
+  bindata (3.0.0) sha256=7edc84092f958326ea1a3207142c79ba9f6b53796a02098a5b1670be75bd8a79
   concurrent-ruby (1.3.8) sha256=b2f1be836e968ccc78ccfce277ea79c72a88633f22306782c16ff23fb415d1e1
   csv (3.3.6) sha256=aba61e7e507a66f03d45cb1f3c4b6359861c3504038b422962875dce099e4456
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
   drb (2.2.3) sha256=0b00d6fdb50995fe4a45dea13663493c841112e4068656854646f418fda13373
-  elftools (1.3.1) sha256=9d46fca49a7d5e821b9c80127b19d59e8ce578bfaa17b99c8ff259222686aaf8
+  elftools (2.0.0) sha256=6af1cd58f0f343ada0cb040c8a1c2b36d794fca6b0ae30e69a10945c8246c920
   erubi (1.13.1) sha256=a082103b0885dbc5ecf1172fede897f9ebdb745a4b97a5e8dc63953db1ee4ad9
   hana (1.3.7) sha256=5425db42d651fea08859811c29d20446f16af196308162894db208cac5ce9b0d
   json (2.21.2) sha256=1f1d3b7cf2b3ba1a69beca0bb6db13d5438b80bff3cd54cdaaa620b9b07c1c6a
@@ -256,7 +256,7 @@ CHECKSUMS
   rubocop (1.89.0) sha256=4dee8e3ee9c45e474834efd9e8d6fd031e8331c8dacdff0de4ad65ae0a6faae7
   rubocop-ast (1.50.0) sha256=b9ca88300da0803ee222ad20cdb30494c0a784eed06fdc35d254b06d662788db
   rubocop-md (2.0.4) sha256=0d076b6b5e99dea2ddc928c4bd702497decb9a8400da7808091e02ebcafcfb93
-  rubocop-performance (1.26.1) sha256=cd19b936ff196df85829d264b522fd4f98b6c89ad271fa52744a8c11b8f71834
+  rubocop-performance (1.27.0) sha256=eeeb1374d062a368ee1c787b70eb0b0cc4b184cb1f8565f424760946146d61ce
   rubocop-rspec (3.10.2) sha256=0b3e2ecc592cd10ecbf0095bb58d1e357905276e069643523cc19eb7495f65e2
   rubocop-sorbet (0.14.0) sha256=30899556c9d02ab291d8bb761bae1cc025de56f72d909286b6960c1620d67bda
   ruby-lsp (0.26.10) sha256=e67284af94423531f6b9a583350596421b5a6a4dd93083f1c2ba03da7c23bbed
@@ -270,12 +270,12 @@ CHECKSUMS
   simplecov (1.1.1) sha256=25825ef13f0b2e74694d769817dad6ab8e90131dabdaa666e522fea105521e78
   simplecov-cobertura (4.0.0) sha256=e4fb3159b1ecea545b44f5452a8611305323e78ad23eae8aed35924d072e01ea
   simpleidn (0.2.3) sha256=08ce96f03fa1605286be22651ba0fc9c0b2d6272c9b27a260bc88be05b0d2c29
-  sorbet (0.6.13426) sha256=e1f1fc220c37b93e4fe42892cadd2d348876f723c267efd0701ee14a7307c3f8
-  sorbet-runtime (0.6.13426) sha256=6c4edafc6406ff89ba819ac6f5e1441459a2ac36f463f65b04c34cb16213c998
-  sorbet-static (0.6.13426-aarch64-linux) sha256=ddec31922a5b4b91305354b6bda696bd4e5980cb07fb3e2798eed1f4c92c58ec
-  sorbet-static (0.6.13426-universal-darwin) sha256=0758b45a87e93a85370fb47584e301c5bc5db8d643605d43f466d8a374a6eb9a
-  sorbet-static (0.6.13426-x86_64-linux) sha256=9f211ec3695f4e8144172156c2f20ca580d46bb1de5cc30dbe40e827c6798510
-  sorbet-static-and-runtime (0.6.13426) sha256=b5cd434598e3de7fa776b5d18fc6483b489ac062b955c51d5c0ec6e968528d10
+  sorbet (0.6.13428) sha256=d8fdb7c7fa06c9de9c9c6452fcb9e303dd6d344f7e416b64308c004e020b6e01
+  sorbet-runtime (0.6.13428) sha256=0841b8f34c6836edd1e4e48eecbf20a7ef2ec93ddcd0f8cc854028076d8c50e1
+  sorbet-static (0.6.13428-aarch64-linux) sha256=8af5970a6ecf2b6c743abe8b0c58ef063cd55ca942bd5991e97e70e536bd01be
+  sorbet-static (0.6.13428-universal-darwin) sha256=51f082bb79e0dc87399f431f7296c2038d812c94d878ed5d12538d9c5ddc8b9f
+  sorbet-static (0.6.13428-x86_64-linux) sha256=3bda8f2a5b4841f121d04754ffd8004baa653bd1afc2da0699a9e1e1a0e84bf5
+  sorbet-static-and-runtime (0.6.13428) sha256=2b192bc3be51b9e30468d3d7622e01cdbc4305648419ae51e5be572fa3b3b30a
   spoom (1.8.7) sha256=81960502cdf23aa991f015988aa5dd43325e23ae4318b8e00d541299cbdb70f6
   stackprof (0.2.28) sha256=4ec2ace02f386012b40ca20ef80c030ad711831f59511da12e83b34efb0f9a04
   tapioca (0.19.2) sha256=938731b07811aee8d23871b1aee8861d464fbaf2cfffbf79a62b0c869a5120ec
@@ -284,7 +284,7 @@ CHECKSUMS
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f
   unicode-display_width (3.2.0) sha256=0cdd96b5681a5949cdbc2c55e7b420facae74c4aaf9a9815eee1087cb1853c42
   unicode-emoji (4.2.0) sha256=519e69150f75652e40bf736106cfbc8f0f73aa3fb6a65afe62fefa7f80b0f80f
-  vernier (1.10.1) sha256=f2ab2e163b75ac3ef4e3173262d27d27da6219cf04b1b4a7171e4798114275ce
+  vernier (1.11.0) sha256=ffc3859da1d53df96a109c6609892dab9f1d96ffbdd77cf13fa4d74032331216
   yard (0.9.45) sha256=52e211493f7cb8a3ebf7e104a25a1e73937a3103092545d34cb88fafebb3dc51
   yard-sorbet (0.9.0) sha256=03d1aa461b9e9c82b886919a13aa3e09fcf4d1852239d2967ed97e92723ffe21
 
