@@ -666,8 +666,10 @@ RSpec.describe Cask::Audit, :cask do
         allow(ObjectSpace).to receive(:define_finalizer)
         allow(Cask::Installer).to receive(:new)
           .and_return(instance_double(Cask::Installer, process_rename_operations: nil))
+        allow(Cask::Quarantine).to receive(:available?).and_return(true)
+        quarantine_metadata = Cask::Quarantine.when_available { it }
         allow(Cask::Quarantine).to receive(:available?).and_return(false)
-        expect(Cask::Quarantine).not_to receive(:detect)
+        expect(quarantine_metadata).not_to receive(:detect)
 
         audit.extract_artifacts
       end

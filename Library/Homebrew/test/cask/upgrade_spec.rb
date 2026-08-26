@@ -657,6 +657,8 @@ RSpec.describe Cask::Upgrade, :cask do
   end
 
   context "when an upgrade decides on quarantine after install" do
+    let(:quarantine_metadata) { Cask::Quarantine.when_available { it } }
+
     before do
       Cask::Installer.new(Cask::CaskLoader.load(cask_path("outdated/local-caffeine"))).install
       allow(Cask::Quarantine).to receive(:available?).and_return(true)
@@ -670,7 +672,7 @@ RSpec.describe Cask::Upgrade, :cask do
         signing_identity_match: true,
       )
 
-      expect(Cask::Quarantine).to receive(:inherit_user_approval!)
+      expect(quarantine_metadata).to receive(:inherit_user_approval!)
         .with(download_path: local_caffeine_path, approved_paths: [])
 
       described_class.upgrade_casks!(local_caffeine, args:)
@@ -683,7 +685,7 @@ RSpec.describe Cask::Upgrade, :cask do
         signing_identity:       identity,
         signing_identity_match: true,
       )
-      allow(Cask::Quarantine).to receive(:inherit_user_approval!)
+      allow(quarantine_metadata).to receive(:inherit_user_approval!)
         .and_raise(Cask::CaskQuarantineReleaseError.new(local_caffeine_path, "Operation not permitted"))
 
       expect do
@@ -692,7 +694,8 @@ RSpec.describe Cask::Upgrade, :cask do
     end
 
     it "reports the skipped quarantine release under --verbose when approval is missing" do
-      allow(Cask::Quarantine).to receive_messages(user_approved?: false, inherit_user_approval!: nil)
+      allow(Cask::Quarantine).to receive(:user_approved?).and_return(false)
+      allow(quarantine_metadata).to receive(:inherit_user_approval!)
 
       expect do
         described_class.upgrade_casks!(local_caffeine, verbose: true, args:)
@@ -705,8 +708,8 @@ RSpec.describe Cask::Upgrade, :cask do
         user_approved?:         true,
         signing_identity:       identity,
         signing_identity_match: false,
-        inherit_user_approval!: nil,
       )
+      allow(quarantine_metadata).to receive(:inherit_user_approval!)
 
       expect do
         described_class.upgrade_casks!(local_caffeine, args:)
@@ -719,8 +722,8 @@ RSpec.describe Cask::Upgrade, :cask do
         user_approved?:         true,
         signing_identity:       identity,
         signing_identity_match: nil,
-        inherit_user_approval!: nil,
       )
+      allow(quarantine_metadata).to receive(:inherit_user_approval!)
 
       expect do
         described_class.upgrade_casks!(local_caffeine, args:)
@@ -773,8 +776,10 @@ RSpec.describe Cask::Upgrade, :cask do
     end
 
     it "upgrades without reading quarantine metadata" do
+      allow(Cask::Quarantine).to receive(:available?).and_return(true)
+      quarantine_metadata = Cask::Quarantine.when_available { it }
       allow(Cask::Quarantine).to receive(:available?).and_return(false)
-      expect(Cask::Quarantine).not_to receive(:detect)
+      expect(quarantine_metadata).not_to receive(:detect)
 
       expect { described_class.upgrade_casks!(local_caffeine, args:) }
         .to change(local_caffeine, :installed_version).from("1.2.2").to("1.2.3")

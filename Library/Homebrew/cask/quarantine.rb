@@ -20,15 +20,179 @@ module Cask
     # https://github.com/apple-oss-distributions/WebKit/blob/WebKit-7618.2.12.11.6/Source/WebCore/PAL/pal/spi/mac/QuarantineSPI.h#L40-L45
     USER_APPROVED_FLAG = 0x0040
 
-    sig { returns(T.nilable(Pathname)) }
-    def self.xattr
-      @xattr ||= T.let(DevelopmentTools.locate("xattr"), T.nilable(Pathname))
+    # The operations that read or write quarantine metadata, which only exists where quarantine is
+    # supported. The only instance is handed out by {Quarantine.when_available}, which performs the
+    # support check once, so holding one proves the check has happened.
+    class Metadata
+      include SystemCommand::Mixin
+      include ::Utils::Output::Mixin
+
+      sig { returns(T.nilable(Pathname)) }
+      def xattr
+        @xattr ||= T.let(DevelopmentTools.locate("xattr"), T.nilable(Pathname))
+      end
+
+      sig { params(file: T.nilable(T.any(String, Pathname))).returns(T.nilable(T::Boolean)) }
+      def detect(file)
+        return if file.nil?
+
+        odebug "Verifying Gatekeeper status of #{file}"
+
+        quarantine_status = !status(file).empty?
+
+        odebug "#{file} is #{quarantine_status ? "quarantined" : "not quarantined"}"
+
+        quarantine_status
+      end
+
+      sig { params(file: T.any(String, Pathname)).returns(String) }
+      def status(file)
+        xattr = self.xattr
+        raise "unexpected nil xattr" if xattr.nil?
+
+        system_command(xattr,
+                       args:         ["-p", QUARANTINE_ATTRIBUTE, file],
+                       print_stderr: false).stdout.rstrip
+      end
+
+      sig { params(download_path: T.nilable(Pathname), approved_paths: T::Array[String]).void }
+      def inherit_user_approval!(download_path: nil, approved_paths: [])
+        return if !download_path || !detect(download_path)
+
+        # Preserve quarantine provenance so Gatekeeper still checks the upgraded app while carrying forward
+        # the user's approval only after the upgrade path verifies that its signing identity is unchanged.
+        # https://developer.apple.com/forums/thread/706442
+        odebug "Inheriting user approval for #{download_path}"
+
+        xattr = self.xattr
+        raise "unexpected nil xattr" if xattr.nil?
+
+        # Mirror the approvals the previous version had accumulated onto the paths it shared with this one;
+        # anything new to this version has never run, so it stays unapproved.
+        inherited_paths = approved_paths.map { |path| download_path/path }
+                                        .select { |path| path.exist? && !path.symlink? }
+
+        quarantiner = system_command("/usr/bin/xargs",
+                                     args:         [
+                                       "-0",
+                                       "--",
+                                       xattr,
+                                       "-w",
+                                       QUARANTINE_ATTRIBUTE,
+                                       status(download_path).sub(/\A[0-9a-f]+/i) do |flags|
+                                         (flags.to_i(16) | USER_APPROVED_FLAG).to_s(16).rjust(flags.length, "0")
+                                       end,
+                                     ],
+                                     input:        [download_path, *inherited_paths].join("\0"),
+                                     print_stderr: false)
+
+        return if quarantiner.success?
+
+        raise CaskQuarantineReleaseError.new(download_path, quarantiner.stderr)
+      end
+
+      # Fully remove quarantine only when explicitly requested; upgrades preserve it and inherit approval above.
+      sig { params(download_path: T.nilable(Pathname)).void }
+      def release!(download_path: nil)
+        return if !download_path || !detect(download_path)
+
+        odebug "Releasing #{download_path} from quarantine"
+
+        xattr = self.xattr
+        raise "unexpected nil xattr" if xattr.nil?
+
+        quarantiner = system_command(xattr,
+                                     args:         [
+                                       "-d",
+                                       QUARANTINE_ATTRIBUTE,
+                                       download_path,
+                                     ],
+                                     print_stderr: false)
+
+        return if quarantiner.success?
+
+        raise CaskQuarantineReleaseError.new(download_path, quarantiner.stderr)
+      end
+
+      sig { params(cask: T.nilable(Cask), download_path: T.nilable(Pathname), action: T::Boolean).void }
+      def cask!(cask: nil, download_path: nil, action: true)
+        raise NotImplementedError
+      end
+
+      sig { params(from: T.nilable(Pathname), to: T.nilable(Pathname)).void }
+      def propagate(from: nil, to: nil)
+        return if from.nil? || to.nil?
+
+        raise CaskError, "#{from} was not quarantined properly." unless detect(from)
+
+        odebug "Propagating quarantine from #{from} to #{to}"
+
+        quarantine_status = Quarantine.toggle_no_translocation_bit(status(from))
+
+        resolved_paths = Pathname.glob(to/"**/*", File::FNM_DOTMATCH).reject(&:symlink?)
+
+        system_command!("/usr/bin/xargs",
+                        args:  [
+                          "-0",
+                          "--",
+                          "chmod",
+                          "-h",
+                          "u+w",
+                        ],
+                        input: resolved_paths.join("\0"))
+
+        xattr = self.xattr
+        raise "unexpected nil xattr" if xattr.nil?
+
+        quarantiner = system_command("/usr/bin/xargs",
+                                     args:         [
+                                       "-0",
+                                       "--",
+                                       xattr,
+                                       "-w",
+                                       QUARANTINE_ATTRIBUTE,
+                                       quarantine_status,
+                                     ],
+                                     input:        resolved_paths.join("\0"),
+                                     print_stderr: false)
+
+        return if quarantiner.success?
+
+        raise CaskQuarantinePropagationError.new(to, quarantiner.stderr)
+      end
+
+      sig { params(from: Pathname, to: Pathname, command: T.class_of(SystemCommand)).void }
+      def copy_xattrs(from, to, command:)
+        raise NotImplementedError
+      end
+
+      private_class_method :new
     end
-    private_class_method :xattr
+
+    # Yields the quarantine metadata operations when quarantine is supported and does nothing
+    # otherwise, so the support check cannot be forgotten at a call site.
+    sig {
+      type_parameters(:U)
+        .params(_block: T.proc.params(quarantine: Metadata).returns(T.type_parameter(:U)))
+        .returns(T.nilable(T.type_parameter(:U)))
+    }
+    def self.when_available(&_block)
+      return unless available?
+
+      yield metadata
+    end
+
+    sig { returns(Metadata) }
+    def self.metadata
+      # `new` is deliberately private: constructing the metadata operations anywhere else would
+      # bypass the availability check above.
+      @metadata ||= T.let(Metadata.send(:new), T.nilable(Metadata))
+    end
+    private_class_method :metadata
 
     sig { returns(T::Boolean) }
     def self.xattr_available?
-      xattr = self.xattr
+      xattr = metadata.xattr
       return false if xattr.nil?
 
       system_command(xattr, args: ["-h"], print_stderr: false).success?
@@ -46,29 +210,6 @@ module Cask
       @quarantine_support[0] == :quarantine_available
     end
 
-    sig { params(file: T.nilable(T.any(String, Pathname))).returns(T.nilable(T::Boolean)) }
-    def self.detect(file)
-      return if file.nil?
-
-      odebug "Verifying Gatekeeper status of #{file}"
-
-      quarantine_status = !status(file).empty?
-
-      odebug "#{file} is #{quarantine_status ? "quarantined" : "not quarantined"}"
-
-      quarantine_status
-    end
-
-    sig { params(file: T.any(String, Pathname)).returns(String) }
-    def self.status(file)
-      xattr = self.xattr
-      raise "unexpected nil xattr" if xattr.nil?
-
-      system_command(xattr,
-                     args:         ["-p", QUARANTINE_ATTRIBUTE, file],
-                     print_stderr: false).stdout.rstrip
-    end
-
     sig { params(quarantine_status: String).returns(T::Boolean) }
     def self.user_approved_status?(quarantine_status)
       return false if quarantine_status.empty?
@@ -79,9 +220,9 @@ module Cask
 
     sig { params(file: T.any(String, Pathname)).returns(T::Boolean) }
     def self.user_approved?(file)
-      return false if xattr.nil?
+      return false if metadata.xattr.nil?
 
-      user_approved_status?(status(file))
+      user_approved_status?(metadata.status(file))
     end
 
     # The paths inside `directory` that Gatekeeper has approved, relative to it. macOS records approval on
@@ -90,7 +231,7 @@ module Cask
     sig { params(directory: T.any(String, Pathname)).returns(T::Array[String]) }
     def self.user_approved_paths(directory)
       directory = Pathname(directory)
-      xattr = self.xattr
+      xattr = metadata.xattr
       return [] if xattr.nil? || !directory.directory?
 
       # Read the whole tree in one pass: `xattr -r` prefixes each line with `path: `, and exits non-zero
@@ -106,42 +247,6 @@ module Cask
 
         path.relative_path_from(directory).to_s
       end
-    end
-
-    sig { params(download_path: T.nilable(Pathname), approved_paths: T::Array[String]).void }
-    def self.inherit_user_approval!(download_path: nil, approved_paths: [])
-      return if !download_path || !detect(download_path)
-
-      # Preserve quarantine provenance so Gatekeeper still checks the upgraded app while carrying forward
-      # the user's approval only after the upgrade path verifies that its signing identity is unchanged.
-      # https://developer.apple.com/forums/thread/706442
-      odebug "Inheriting user approval for #{download_path}"
-
-      xattr = self.xattr
-      raise "unexpected nil xattr" if xattr.nil?
-
-      # Mirror the approvals the previous version had accumulated onto the paths it shared with this one;
-      # anything new to this version has never run, so it stays unapproved.
-      inherited_paths = approved_paths.map { |path| download_path/path }
-                                      .select { |path| path.exist? && !path.symlink? }
-
-      quarantiner = system_command("/usr/bin/xargs",
-                                   args:         [
-                                     "-0",
-                                     "--",
-                                     xattr,
-                                     "-w",
-                                     QUARANTINE_ATTRIBUTE,
-                                     status(download_path).sub(/\A[0-9a-f]+/i) do |flags|
-                                       (flags.to_i(16) | USER_APPROVED_FLAG).to_s(16).rjust(flags.length, "0")
-                                     end,
-                                   ],
-                                   input:        [download_path, *inherited_paths].join("\0"),
-                                   print_stderr: false)
-
-      return if quarantiner.success?
-
-      raise CaskQuarantineReleaseError.new(download_path, quarantiner.stderr)
     end
 
     sig { params(_file: T.any(String, Pathname)).returns(T.nilable(SigningIdentity)) }
@@ -164,81 +269,6 @@ module Cask
       fields[0] = (fields.fetch(0).to_i(16) | 0x0100).to_s(16).rjust(4, "0")
 
       fields.join(";")
-    end
-
-    # Fully remove quarantine only when explicitly requested; upgrades preserve it and inherit approval above.
-    sig { params(download_path: T.nilable(Pathname)).void }
-    def self.release!(download_path: nil)
-      return if !download_path || !detect(download_path)
-
-      odebug "Releasing #{download_path} from quarantine"
-
-      xattr = self.xattr
-      raise "unexpected nil xattr" if xattr.nil?
-
-      quarantiner = system_command(xattr,
-                                   args:         [
-                                     "-d",
-                                     QUARANTINE_ATTRIBUTE,
-                                     download_path,
-                                   ],
-                                   print_stderr: false)
-
-      return if quarantiner.success?
-
-      raise CaskQuarantineReleaseError.new(download_path, quarantiner.stderr)
-    end
-
-    sig { params(cask: T.nilable(Cask), download_path: T.nilable(Pathname), action: T::Boolean).void }
-    def self.cask!(cask: nil, download_path: nil, action: true)
-      raise NotImplementedError
-    end
-
-    sig { params(from: T.nilable(Pathname), to: T.nilable(Pathname)).void }
-    def self.propagate(from: nil, to: nil)
-      return if from.nil? || to.nil?
-
-      raise CaskError, "#{from} was not quarantined properly." unless detect(from)
-
-      odebug "Propagating quarantine from #{from} to #{to}"
-
-      quarantine_status = toggle_no_translocation_bit(status(from))
-
-      resolved_paths = Pathname.glob(to/"**/*", File::FNM_DOTMATCH).reject(&:symlink?)
-
-      system_command!("/usr/bin/xargs",
-                      args:  [
-                        "-0",
-                        "--",
-                        "chmod",
-                        "-h",
-                        "u+w",
-                      ],
-                      input: resolved_paths.join("\0"))
-
-      xattr = self.xattr
-      raise "unexpected nil xattr" if xattr.nil?
-
-      quarantiner = system_command("/usr/bin/xargs",
-                                   args:         [
-                                     "-0",
-                                     "--",
-                                     xattr,
-                                     "-w",
-                                     QUARANTINE_ATTRIBUTE,
-                                     quarantine_status,
-                                   ],
-                                   input:        resolved_paths.join("\0"),
-                                   print_stderr: false)
-
-      return if quarantiner.success?
-
-      raise CaskQuarantinePropagationError.new(to, quarantiner.stderr)
-    end
-
-    sig { params(from: Pathname, to: Pathname, command: T.class_of(SystemCommand)).void }
-    def self.copy_xattrs(from, to, command:)
-      raise NotImplementedError
     end
 
     # Ensures that Homebrew has permission to update apps on macOS Ventura.

@@ -428,8 +428,7 @@ module Cask
 
         new_cask_installer.fetch
 
-        # This snapshot reads quarantine metadata, so it needs the same guard as the code below that uses it.
-        if Quarantine.available?
+        Quarantine.when_available do |quarantine|
           old_cask.artifacts.grep(Artifact::App).each do |artifact|
             user_approved = if artifact.target.exist?
               Quarantine.user_approved?(artifact.target)
@@ -443,7 +442,7 @@ module Cask
                 Quarantine.user_approved_paths(artifact.target)
             end
             old_unquarantined[artifact.target.to_s] = if artifact.target.exist?
-              Quarantine.detect(artifact.target).blank?
+              quarantine.detect(artifact.target).blank?
             else
               false
             end
@@ -462,7 +461,7 @@ module Cask
         new_cask_installer.install_artifacts(predecessor: old_cask)
         new_artifacts_installed = true
 
-        if Quarantine.available?
+        Quarantine.when_available do |quarantine|
           case quarantine_release_decision(old_cask, new_cask, old_signing_identities, old_user_approved,
                                            old_unquarantined)
           when :release
@@ -470,7 +469,7 @@ module Cask
               odebug "#{new_cask.token} wasn't quarantined so approving the new version to match."
             end
             new_cask.artifacts.grep(Artifact::App).each do |artifact|
-              Quarantine.inherit_user_approval!(
+              quarantine.inherit_user_approval!(
                 download_path:  artifact.target,
                 approved_paths: old_approved_paths.fetch(artifact.target.to_s, []),
               )

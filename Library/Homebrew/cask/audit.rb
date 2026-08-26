@@ -236,9 +236,7 @@ module Cask
 
       # Propagate quarantine attributes from the downloaded file to extracted contents.
       # This is necessary because some extraction tools (like 7zr) don't preserve xattrs.
-      if Quarantine.available? && Quarantine.detect(downloaded_path)
-        Quarantine.propagate(from: downloaded_path, to: @tmpdir)
-      end
+      Quarantine.when_available { it.propagate(from: downloaded_path, to: @tmpdir) if it.detect(downloaded_path) }
 
       # Process rename operations after extraction
       # Create a temporary installer to process renames in the audit directory
@@ -634,7 +632,7 @@ module Cask
           artifact_path = artifact_path.relative_path_from(cask.staged_path) if artifact_path.absolute?
           path = tmpdir/artifact_path
 
-          unless Quarantine.detect(path)
+          unless Quarantine.when_available { it.detect(path) }
             odebug "#{path} does not have quarantine attributes, skipping signing audit"
             next false
           end

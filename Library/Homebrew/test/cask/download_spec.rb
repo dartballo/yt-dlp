@@ -122,7 +122,8 @@ RSpec.describe Cask::Download, :cask do
       end
       allow(Cask::Quarantine).to receive(:available?).and_return(true)
 
-      expect(Cask::Quarantine).to receive(:cask!).with(cask:, download_path: cached_download)
+      quarantine_metadata = Cask::Quarantine.when_available { it }
+      expect(quarantine_metadata).to receive(:cask!).with(cask:, download_path: cached_download)
 
       expect(download.downloaded_and_valid?).to be(true)
     end

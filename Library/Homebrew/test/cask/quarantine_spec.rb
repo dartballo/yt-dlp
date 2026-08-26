@@ -5,6 +5,8 @@ require "open3"
 
 RSpec.describe Cask::Quarantine do
   let(:klass) { described_class }
+  # The only route to the metadata operations is the doorway, so the specs take the same route.
+  let(:metadata) { klass.when_available { it } }
 
   describe ".available?", :needs_macos do
     before do
@@ -12,7 +14,6 @@ RSpec.describe Cask::Quarantine do
     end
 
     it "uses FFI quarantine support when xattr works" do
-      allow(klass).to receive(:xattr).and_return(Pathname("/usr/bin/xattr"))
       allow(klass).to receive(:system_command)
         .with(Pathname("/usr/bin/xattr"), args: ["-h"], print_stderr: false)
         .and_return(instance_double(SystemCommand::Result, success?: true))
@@ -20,6 +21,20 @@ RSpec.describe Cask::Quarantine do
       with_env(HOMEBREW_DEVELOPER: nil) do
         expect(klass.available?).to be(true)
       end
+    end
+  end
+
+  describe ".when_available" do
+    it "yields the metadata operations when quarantine is available" do
+      allow(klass).to receive(:available?).and_return(true)
+
+      expect(klass.when_available { it }).to be_a(Cask::Quarantine::Metadata)
+    end
+
+    it "returns nil without yielding when quarantine is unavailable" do
+      allow(klass).to receive(:available?).and_return(false)
+
+      expect(klass.when_available { raise "must not be reached" }).to be_nil
     end
   end
 
@@ -37,13 +52,13 @@ RSpec.describe Cask::Quarantine do
         download_path = tmpdir/"Test.dmg"
         download_path.write("test")
 
-        expect(klass.status(download_path)).to eq("")
+        expect(metadata.status(download_path)).to eq("")
 
         with_env(HOMEBREW_DEVELOPER: nil) do
-          klass.cask!(cask:, download_path:)
+          klass.when_available { it.cask!(cask:, download_path:) }
         end
 
-        expect(klass.status(download_path)).to match(
+        expect(metadata.status(download_path)).to match(
           /\A[0-9a-f]{4};[0-9a-f]+;(?:Homebrew\\x20Cask)?;[0-9A-F-]{36}\z/i,
         )
       end
@@ -55,7 +70,7 @@ RSpec.describe Cask::Quarantine do
 
         expect do
           with_env(HOMEBREW_DEVELOPER: nil) do
-            klass.cask!(cask:, download_path:)
+            klass.when_available { it.cask!(cask:, download_path:) }
           end
         end.to raise_error(Cask::CaskQuarantineError, /Failed to set quarantine properties/)
       end
@@ -73,7 +88,7 @@ RSpec.describe Cask::Quarantine do
       dictionary = instance_double(Fiddle::Pointer, null?: false)
       quarantine_properties_key = instance_double(Fiddle::Pointer)
 
-      allow(klass).to receive(:detect).with(download_path).and_return(false)
+      allow(metadata).to receive(:detect).with(download_path).and_return(false)
       allow(MacOS::FFI::CoreFoundation).to receive(:release)
       allow(MacOS::FFI::CoreFoundation).to receive(:string_create).with(download_path.to_s).and_return(path)
       allow(MacOS::FFI::CoreFoundation).to receive(:url_create_with_file_system_path).with(path).and_return(url)
@@ -102,7 +117,7 @@ RSpec.describe Cask::Quarantine do
         .and_return(true)
 
       with_env(HOMEBREW_DEVELOPER: nil) do
-        klass.cask!(cask:, download_path:)
+        klass.when_available { it.cask!(cask:, download_path:) }
       end
     end
   end
@@ -119,7 +134,7 @@ RSpec.describe Cask::Quarantine do
       expect(MacOS::FFI).to receive(:copy_xattrs).with(source.to_s, destination.to_s)
 
       with_env(HOMEBREW_DEVELOPER: nil) do
-        klass.copy_xattrs(source, destination, command:)
+        klass.when_available { it.copy_xattrs(source, destination, command:) }
       end
     end
 
@@ -145,7 +160,7 @@ RSpec.describe Cask::Quarantine do
       )
 
       with_env(HOMEBREW_DEVELOPER: nil) do
-        klass.copy_xattrs(source, destination, command:)
+        klass.when_available { it.copy_xattrs(source, destination, command:) }
       end
     end
 
@@ -177,17 +192,18 @@ RSpec.describe Cask::Quarantine do
     let(:file) { Pathname("/tmp/Test.app") }
 
     before do
-      allow(klass).to receive(:xattr).and_return(Pathname("/usr/bin/xattr"))
+      allow(klass).to receive(:available?).and_return(true)
+      allow(metadata).to receive(:xattr).and_return(Pathname("/usr/bin/xattr"))
     end
 
     it "returns true when the user approval flag is set" do
-      allow(klass).to receive(:status).with(file).and_return("01c3;6723b9fa;Safari;event-id")
+      allow(metadata).to receive(:status).with(file).and_return("01c3;6723b9fa;Safari;event-id")
 
       expect(klass.user_approved?(file)).to be(true)
     end
 
     it "returns false when the user approval flag is not set" do
-      allow(klass).to receive(:status).with(file).and_return("0183;6723b9fa;Safari;event-id")
+      allow(metadata).to receive(:status).with(file).and_return("0183;6723b9fa;Safari;event-id")
 
       expect(klass.user_approved?(file)).to be(false)
     end
@@ -197,13 +213,17 @@ RSpec.describe Cask::Quarantine do
     let(:file) { Pathname("/tmp/Test.app") }
     let(:xattr) { Pathname("/usr/bin/xattr") }
 
+    before do
+      allow(klass).to receive(:available?).and_return(true)
+    end
+
     it "sets the user approval flag while preserving the quarantine metadata" do
-      allow(klass).to receive_messages(
+      allow(metadata).to receive_messages(
         detect: true,
         status: "0381;6a51855d;;3C86362A-29CA-4D55-90E7-A6621B9CC78D",
         xattr:,
       )
-      expect(klass).to receive(:system_command).with(
+      expect(metadata).to receive(:system_command).with(
         "/usr/bin/xargs",
         args:         [
           "-0",
@@ -217,7 +237,7 @@ RSpec.describe Cask::Quarantine do
         print_stderr: false,
       ).and_return(instance_double(SystemCommand::Result, success?: true))
 
-      klass.inherit_user_approval!(download_path: file)
+      klass.when_available { it.inherit_user_approval!(download_path: file) }
     end
 
     it "mirrors approval onto shared paths and skips paths this version does not have" do
@@ -226,12 +246,12 @@ RSpec.describe Cask::Quarantine do
         (app/"Contents/MacOS").mkpath
         FileUtils.touch app/"Contents/MacOS/Test"
 
-        allow(klass).to receive_messages(
+        allow(metadata).to receive_messages(
           detect: true,
           status: "0381;6a51855d;;3C86362A-29CA-4D55-90E7-A6621B9CC78D",
           xattr:,
         )
-        expect(klass).to receive(:system_command).with(
+        expect(metadata).to receive(:system_command).with(
           "/usr/bin/xargs",
           args:         [
             "-0",
@@ -245,14 +265,20 @@ RSpec.describe Cask::Quarantine do
           print_stderr: false,
         ).and_return(instance_double(SystemCommand::Result, success?: true))
 
-        klass.inherit_user_approval!(download_path:  app,
-                                     approved_paths: ["Contents/MacOS/Test", "Contents/MacOS/Removed"])
+        klass.when_available do |quarantine|
+          quarantine.inherit_user_approval!(download_path:  app,
+                                            approved_paths: ["Contents/MacOS/Test", "Contents/MacOS/Removed"])
+        end
       end
     end
   end
 
   describe ".user_approved_paths" do
     let(:xattr) { Pathname("/usr/bin/xattr") }
+
+    before do
+      allow(klass).to receive(:available?).and_return(true)
+    end
 
     it "returns only the approved paths, relative to the directory" do
       mktmpdir do |tmpdir|
@@ -261,13 +287,15 @@ RSpec.describe Cask::Quarantine do
         FileUtils.touch app/"Contents/approved"
         FileUtils.touch app/"Contents/unapproved"
 
-        allow(klass).to receive_messages(xattr: xattr, system_command: instance_double(
+        result = instance_double(
           SystemCommand::Result,
           stdout: "#{app}: 03c1;6a51855d;;uuid\n" \
                   "#{app}/Contents: 0381;6a51855d;;uuid\n" \
                   "#{app}/Contents/approved: 03c1;6a51855d;;uuid\n" \
                   "#{app}/Contents/unapproved: 0381;6a51855d;;uuid\n",
-        ))
+        )
+        allow(metadata).to receive(:xattr).and_return(xattr)
+        allow(klass).to receive(:system_command).and_return(result)
 
         expect(klass.user_approved_paths(app)).to eq(["Contents/approved"])
       end
